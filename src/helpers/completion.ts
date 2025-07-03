@@ -2,7 +2,6 @@ import {
   OpenAIApi,
   Configuration,
   ChatCompletionRequestMessage,
-  Model,
 } from 'openai';
 import dedent from 'dedent';
 import { IncomingMessage } from 'http';
@@ -409,24 +408,3 @@ function getRevisionPrompt(prompt: string, code: string) {
   `;
 }
 
-export async function getModels(
-  key: string, // This will be OPENAI_KEY or GEMINI_API_KEY based on provider
-  apiEndpoint: string // Only for OpenAI
-): Promise<Model[]> { // This return type is OpenAI specific
-  const config = await getConfig();
-  if (config.AI_PROVIDER === 'gemini') {
-    // TODO: Implement model listing for Gemini if their SDK supports it and it's needed.
-    // For now, returning an empty array or a predefined list for Gemini.
-    // This function is currently only used for OpenAI model selection in config UI.
-    return [];
-  }
-
-  // Default to OpenAI
-  if (!config.OPENAI_KEY) {
-    throw new KnownError('OpenAI API key not set.');
-  }
-  const openAi = getOpenAi(config.OPENAI_KEY, apiEndpoint);
-  const response = await openAi.listModels();
-
-  return response.data.data.filter((model) => model.object === 'model');
-}

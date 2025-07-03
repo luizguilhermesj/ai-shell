@@ -8,7 +8,7 @@ import { KnownError, handleCliError } from './error';
 import * as p from '@clack/prompts';
 import { red } from 'kolorist';
 import i18n from './i18n';
-import { getModels } from './completion';
+import { getModels } from './models'; // Changed import path
 import { Model } from 'openai';
 
 const { hasOwnProperty } = Object.prototype;
@@ -223,9 +223,13 @@ export const showConfigUI = async () => {
       if (p.isCancel(silentMode)) return;
       await setConfigs([['SILENT_MODE', silentMode ? 'true' : 'false']]);
     } else if (choice === 'MODEL') {
-      const { OPENAI_KEY: key, OPENAI_API_ENDPOINT: apiEndpoint } =
-        await getConfig();
-      const models = await getModels(key, apiEndpoint);
+      const currentConfig = await getConfig();
+      const models = await getModels(
+        currentConfig.AI_PROVIDER,
+        currentConfig.OPENAI_KEY,
+        currentConfig.OPENAI_API_ENDPOINT
+        // currentConfig.GEMINI_API_KEY // Add if Gemini model listing is implemented
+      );
       const model = (await p.select({
         message: 'Pick a model.',
         options: models.map((m: Model) => {
