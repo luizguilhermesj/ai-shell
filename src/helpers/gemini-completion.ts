@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import dedent from 'dedent';
 import { KnownError } from './error';
 import { streamToIterable } from './stream-to-iterable';
