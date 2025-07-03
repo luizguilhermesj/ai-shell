@@ -21,13 +21,7 @@ function getGemini(key: string) {
 // a github style like: "```bash"
 const shellCodeExclusions = [/```[a-zA-Z]*\n/gi, /```[a-zA-Z]*/gi, '\n'];
 
-// Helper function to check if a model name is likely a Gemini model
-function modellenNameIsGemini(modelName?: string): modelName is string {
-  if (!modelName) return false;
-  // Simple check: Gemini models usually don't start with 'gpt-' or 'text-'
-  // and often include 'gemini'. This can be made more robust.
-  return modelName.includes('gemini') || (!modelName.startsWith('gpt-') && !modelName.startsWith('text-'));
-}
+
 
 export async function getScriptAndInfo({
   prompt,
@@ -38,7 +32,7 @@ export async function getScriptAndInfo({
   key: string;
   modelName?: string;
 }) {
-  const currentModelName = modellenNameIsGemini(modelName) ? modelName : 'gemini-1.5-flash-latest';
+  
   const fullPrompt = getFullPrompt(prompt);
   const stream = await generateCompletion({
     prompt: fullPrompt,
@@ -65,11 +59,10 @@ export async function generateCompletion({
   key: string;
 }) {
   const genAI = getGemini(key);
-  const currentModelName = modellenNameIsGemini(modelName) ? modelName : 'gemini-1.5-flash-latest';
 
   try {
     const result = await genAI.models.generateContentStream({ // Call on genAI.models
-      model: currentModelName, // Use potentially overridden model name
+      model: modelName, // Use potentially overridden model name
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       // generationConfig: { // Add if needed
       //   candidateCount: number,
@@ -136,7 +129,7 @@ export async function getExplanation({
   modelName?: string;
 }) {
   const prompt = getExplanationPrompt(script);
-  const currentModelName = modellenNameIsGemini(modelName) ? modelName : 'gemini-1.5-flash-latest';
+  
   const stream = await generateCompletion({
     prompt,
     key,
@@ -159,7 +152,7 @@ export async function getRevision({
   modelName?: string;
 }) {
   const fullPrompt = getRevisionPrompt(prompt, code);
-  const currentModelName = modellenNameIsGemini(modelName) ? modelName : 'gemini-1.5-flash-latest';
+  
   const stream = await generateCompletion({
     prompt: fullPrompt,
     key,
