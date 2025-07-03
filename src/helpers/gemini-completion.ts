@@ -32,7 +32,7 @@ export async function getScriptAndInfo({
   key: string;
   modelName?: string;
 }) {
-  
+  const currentModelName = modelName;
   const fullPrompt = getFullPrompt(prompt);
   const stream = await generateCompletion({
     prompt: fullPrompt,
@@ -129,7 +129,7 @@ export async function getExplanation({
   modelName?: string;
 }) {
   const prompt = getExplanationPrompt(script);
-  
+  const currentModelName = modelName;
   const stream = await generateCompletion({
     prompt,
     key,
@@ -152,7 +152,7 @@ export async function getRevision({
   modelName?: string;
 }) {
   const fullPrompt = getRevisionPrompt(prompt, code);
-  
+  const currentModelName = modelName;
   const stream = await generateCompletion({
     prompt: fullPrompt,
     key,
@@ -175,32 +175,31 @@ export const readData =
       let stopTextStream = false;
       let data = '';
       let content = '';
-      let dataStart = false;
-      let buffer = '';
 
       const [excludedPrefix] = excluded;
       const stopTextStreamKeys = ['q', 'escape'];
 
-      const rl = readline.createInterface({
-        input: process.stdin,
-      });
+      if (process.stdout.isTTY) {
+        const rl = readline.createInterface({
+          input: process.stdin,
+        });
 
-      process.stdin.setRawMode(true);
+        process.stdin.setRawMode(true);
 
-      process.stdin.on('keypress', (key, data) => {
-        if (stopTextStreamKeys.includes(data.name)) {
-          stopTextStream = true;
-        }
-      });
+        process.stdin.on('keypress', (key, data) => {
+          if (stopTextStreamKeys.includes(data.name)) {
+            stopTextStream = true;
+          }
+        });
+      }
 
       for await (const chunk of iterableStream) {
         // Adapt chunk processing for Gemini's stream format
         // const payloads = chunk.toString().split('\n\n');
         // For Gemini, the chunk might be structured differently, e.g., chunk.text()
-        const textContent = chunk.text(); // Assuming chunk has a text() method
+        const textContent = chunk.candidates[0].content.parts[0].text;
 
         if (stopTextStream) {
-          dataStart = false;
           resolve(data);
           return;
         }
@@ -210,16 +209,7 @@ export const readData =
         // if (payload.startsWith('data:')) { // This check might not be relevant for Gemini
 
         content = textContent;
-        if (!dataStart) {
-          buffer += content;
-          if (buffer.match(excludedPrefix ?? '')) {
-            dataStart = true;
-            buffer = '';
-            if (excludedPrefix) continue; // continue instead of break to process the rest of the chunk
-          }
-        }
-
-        if (dataStart && content) {
+        if (content) {
           const contentWithoutExcluded = stripRegexPatterns(
             content,
             excluded

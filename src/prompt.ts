@@ -163,7 +163,11 @@ export async function prompt({
     }
   }
 
-  await runOrReviseFlow(script, apiKey as string, model, apiEndpoint, silentMode);
+  if (process.stdout.isTTY) {
+    await runOrReviseFlow(script, apiKey as string, model, apiEndpoint, silentMode);
+  } else {
+    await runScript(script);
+  }
 }
 
 async function runOrReviseFlow(
