@@ -46,6 +46,15 @@
 
    This will create a `.ai-shell` file in your home directory.
 
+4. (Optional) If you want to use Gemini, retrieve your API key from [Google AI Studio](https://aistudio.google.com/apikey) and set it:
+   ```sh
+   ai config set GEMINI_API_KEY=<your token>
+   ```
+   Then, set Gemini as your preferred AI provider:
+   ```sh
+   ai config set AI_PROVIDER=gemini
+   ```
+
 ## Usage
 
 ```bash
@@ -183,6 +192,7 @@ To get an interactive UI like below:
 │  ○ Silent Mode
 │  ● Model (gpt-4o-mini)
 │  ○ Language
+│  ○ AI Provider (openai)
 │  ○ Cancel
 └
 ```

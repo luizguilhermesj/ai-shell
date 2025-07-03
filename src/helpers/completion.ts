@@ -15,6 +15,8 @@ import './replace-all-polyfill';
 import i18n from './i18n';
 import { stripRegexPatterns } from './strip-regex-patterns';
 import readline from 'readline';
+import { getConfig } from './config';
+import * as gemini from './gemini-completion';
 
 const explainInSecondRequest = true;
 
@@ -31,22 +33,40 @@ const shellCodeExclusions = [/```[a-zA-Z]*\n/gi, /```[a-zA-Z]*/gi, '\n'];
 
 export async function getScriptAndInfo({
   prompt,
-  key,
+  key, // This will be OPENAI_KEY or GEMINI_API_KEY based on provider
   model,
-  apiEndpoint,
+  apiEndpoint, // Only for OpenAI
 }: {
   prompt: string;
   key: string;
   model?: string;
-  apiEndpoint: string;
+  apiEndpoint: string; // Keep for OpenAI, Gemini might not need a separate endpoint config
 }) {
+  const config = await getConfig();
   const fullPrompt = getFullPrompt(prompt);
+
+  if (config.AI_PROVIDER === 'gemini') {
+    if (!config.GEMINI_API_KEY) {
+      throw new KnownError(
+        'Gemini API key is not set. Please run `ai-shell config set GEMINI_API_KEY <your-key>`'
+      );
+    }
+    // @ts-expect-error
+    return gemini.getScriptAndInfo({ prompt: fullPrompt, key: config.GEMINI_API_KEY, modelName: model });
+  }
+
+  // Default to OpenAI
+  if (!config.OPENAI_KEY) {
+    throw new KnownError(
+      'OpenAI API key is not set. Please run `ai-shell config set OPENAI_KEY <your-key>`'
+    );
+  }
   const stream = await generateCompletion({
     prompt: fullPrompt,
     number: 1,
-    key,
+    key: config.OPENAI_KEY,
     model,
-    apiEndpoint,
+    apiEndpoint: config.OPENAI_API_ENDPOINT,
   });
   const iterableStream = streamToIterable(stream);
   return {
@@ -68,7 +88,21 @@ export async function generateCompletion({
   key: string;
   apiEndpoint: string;
 }) {
-  const openAi = getOpenAi(key, apiEndpoint);
+  const config = await getConfig();
+
+  if (config.AI_PROVIDER === 'gemini') {
+    if (!config.GEMINI_API_KEY) {
+      throw new KnownError('Gemini API key not set.');
+    }
+    // @ts-expect-error
+    return gemini.generateCompletion({ prompt: prompt as string, number, key: config.GEMINI_API_KEY, modelName: model });
+  }
+
+  // Default to OpenAI
+  if (!config.OPENAI_KEY) {
+    throw new KnownError('OpenAI API key not set.');
+  }
+  const openAi = getOpenAi(config.OPENAI_KEY, apiEndpoint);
   try {
     const completion = await openAi.createChatCompletion(
       {
@@ -99,8 +133,6 @@ export async function generateCompletion({
         response.data as unknown as IncomingMessage
       );
       try {
-        // Handle if the message is JSON. It should be but occasionally will
-        // be HTML, so lets handle both
         message = JSON.parse(message);
       } catch (e) {
         // Ignore
@@ -147,13 +179,26 @@ export async function getExplanation({
   model?: string;
   apiEndpoint: string;
 }) {
+  const config = await getConfig();
   const prompt = getExplanationPrompt(script);
+
+  if (config.AI_PROVIDER === 'gemini') {
+    if (!config.GEMINI_API_KEY) {
+      throw new KnownError('Gemini API key not set.');
+    }
+    // @ts-expect-error
+    return gemini.getExplanation({ script, key: config.GEMINI_API_KEY, modelName: model });
+  }
+
+  if (!config.OPENAI_KEY) {
+    throw new KnownError('OpenAI API key not set.');
+  }
   const stream = await generateCompletion({
     prompt,
-    key,
+    key: config.OPENAI_KEY,
     number: 1,
     model,
-    apiEndpoint,
+    apiEndpoint: config.OPENAI_API_ENDPOINT,
   });
   const iterableStream = streamToIterable(stream);
   return { readExplanation: readData(iterableStream) };
@@ -172,13 +217,26 @@ export async function getRevision({
   model?: string;
   apiEndpoint: string;
 }) {
+  const config = await getConfig();
   const fullPrompt = getRevisionPrompt(prompt, code);
+
+  if (config.AI_PROVIDER === 'gemini') {
+    if (!config.GEMINI_API_KEY) {
+      throw new KnownError('Gemini API key not set.');
+    }
+    // @ts-expect-error
+    return gemini.getRevision({ prompt, code, key: config.GEMINI_API_KEY, modelName: model });
+  }
+
+  if (!config.OPENAI_KEY) {
+    throw new KnownError('OpenAI API key not set.');
+  }
   const stream = await generateCompletion({
     prompt: fullPrompt,
-    key,
+    key: config.OPENAI_KEY,
     number: 1,
     model,
-    apiEndpoint,
+    apiEndpoint: config.OPENAI_API_ENDPOINT,
   });
   const iterableStream = streamToIterable(stream);
   return {
@@ -188,7 +246,7 @@ export async function getRevision({
 
 export const readData =
   (
-    iterableStream: AsyncGenerator<string, void>,
+    iterableStream: AsyncGenerator<any, void>, // Adjusted to 'any' for Gemini flexibility
     ...excluded: (RegExp | string | undefined)[]
   ) =>
   (writer: (data: string) => void): Promise<string> =>
@@ -197,10 +255,10 @@ export const readData =
       let data = '';
       let content = '';
       let dataStart = false;
-      let buffer = ''; // This buffer will temporarily hold incoming data only for detecting the start
+      let buffer = '';
 
       const [excludedPrefix] = excluded;
-      const stopTextStreamKeys = ['q', 'escape']; //Group of keys that stop the text stream
+      const stopTextStreamKeys = ['q', 'escape'];
 
       const rl = readline.createInterface({
         input: process.stdin,
@@ -213,54 +271,86 @@ export const readData =
           stopTextStream = true;
         }
       });
+
+      const config = await getConfig();
+
       for await (const chunk of iterableStream) {
-        const payloads = chunk.toString().split('\n\n');
-        for (const payload of payloads) {
-          if (payload.includes('[DONE]') || stopTextStream) {
+        if (config.AI_PROVIDER === 'gemini') {
+          // Handle Gemini stream chunk
+           if (chunk && typeof chunk.text === 'function') {
+            content = chunk.text();
+          } else {
+            // Fallback or error if structure is not as expected
+            content = '';
+          }
+          if (stopTextStream) {
             dataStart = false;
             resolve(data);
             return;
           }
 
-          if (payload.startsWith('data:')) {
-            content = parseContent(payload);
-            // Use buffer only for start detection
-            if (!dataStart) {
-              // Append content to the buffer
-              buffer += content;
-              if (buffer.match(excludedPrefix ?? '')) {
-                dataStart = true;
-                // Clear the buffer once it has served its purpose
-                buffer = '';
-                if (excludedPrefix) break;
-              }
+          if (!dataStart) {
+            buffer += content;
+            if (buffer.match(excludedPrefix ?? '')) {
+              dataStart = true;
+              buffer = '';
+              if (excludedPrefix) continue;
+            }
+          }
+
+          if (dataStart && content) {
+            const contentWithoutExcluded = stripRegexPatterns(
+              content,
+              excluded
+            );
+            data += contentWithoutExcluded;
+            writer(contentWithoutExcluded);
+          }
+        } else {
+          // Handle OpenAI stream chunk
+          const payloads = chunk.toString().split('\n\n');
+          for (const payload of payloads) {
+            if (payload.includes('[DONE]') || stopTextStream) {
+              dataStart = false;
+              resolve(data);
+              return;
             }
 
-            if (dataStart && content) {
-              const contentWithoutExcluded = stripRegexPatterns(
-                content,
-                excluded
-              );
+            if (payload.startsWith('data:')) {
+              content = parseOpenAIChoiceContent(payload);
+              if (!dataStart) {
+                buffer += content;
+                if (buffer.match(excludedPrefix ?? '')) {
+                  dataStart = true;
+                  buffer = '';
+                  if (excludedPrefix) break;
+                }
+              }
 
-              data += contentWithoutExcluded;
-              writer(contentWithoutExcluded);
+              if (dataStart && content) {
+                const contentWithoutExcluded = stripRegexPatterns(
+                  content,
+                  excluded
+                );
+                data += contentWithoutExcluded;
+                writer(contentWithoutExcluded);
+              }
             }
           }
         }
       }
-
-      function parseContent(payload: string): string {
-        const data = payload.replaceAll(/(\n)?^data:\s*/g, '');
-        try {
-          const delta = JSON.parse(data.trim());
-          return delta.choices?.[0]?.delta?.content ?? '';
-        } catch (error) {
-          return `Error with JSON.parse and ${payload}.\n${error}`;
-        }
-      }
-
       resolve(data);
     });
+
+function parseOpenAIChoiceContent(payload: string): string {
+  const data = payload.replaceAll(/(\n)?^data:\s*/g, '');
+  try {
+    const delta = JSON.parse(data.trim());
+    return delta.choices?.[0]?.delta?.content ?? '';
+  } catch (error) {
+    return `Error with JSON.parse and ${payload}.\n${error}`;
+  }
+}
 
 function getExplanationPrompt(script: string) {
   return dedent`
@@ -320,10 +410,22 @@ function getRevisionPrompt(prompt: string, code: string) {
 }
 
 export async function getModels(
-  key: string,
-  apiEndpoint: string
-): Promise<Model[]> {
-  const openAi = getOpenAi(key, apiEndpoint);
+  key: string, // This will be OPENAI_KEY or GEMINI_API_KEY based on provider
+  apiEndpoint: string // Only for OpenAI
+): Promise<Model[]> { // This return type is OpenAI specific
+  const config = await getConfig();
+  if (config.AI_PROVIDER === 'gemini') {
+    // TODO: Implement model listing for Gemini if their SDK supports it and it's needed.
+    // For now, returning an empty array or a predefined list for Gemini.
+    // This function is currently only used for OpenAI model selection in config UI.
+    return [];
+  }
+
+  // Default to OpenAI
+  if (!config.OPENAI_KEY) {
+    throw new KnownError('OpenAI API key not set.');
+  }
+  const openAi = getOpenAi(config.OPENAI_KEY, apiEndpoint);
   const response = await openAi.listModels();
 
   return response.data.data.filter((model) => model.object === 'model');

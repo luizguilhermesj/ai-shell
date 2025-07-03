@@ -38,6 +38,16 @@ const configParsers = {
 
     return key;
   },
+  GEMINI_API_KEY(key?: string) {
+    // Gemini API key is optional for now, as OpenAI is the default
+    return key;
+  },
+  AI_PROVIDER(provider?: string) {
+    if (!provider || (provider !== 'openai' && provider !== 'gemini')) {
+      return 'openai'; // Default to openai
+    }
+    return provider;
+  },
   MODEL(model?: string) {
     if (!model || model.length === 0) {
       return 'gpt-4o-mini';
@@ -129,6 +139,13 @@ export const showConfigUI = async () => {
             : i18n.t('(not set)'),
         },
         {
+          label: i18n.t('Gemini API Key'),
+          value: 'GEMINI_API_KEY',
+          hint: hasOwn(config, 'GEMINI_API_KEY') && config.GEMINI_API_KEY
+            ? 'AIzaS...' + config.GEMINI_API_KEY.slice(-3)
+            : i18n.t('(not set)'),
+        },
+        {
           label: i18n.t('OpenAI API Endpoint'),
           value: 'OPENAI_API_ENDPOINT',
           hint: hasOwn(config, 'OPENAI_API_ENDPOINT')
@@ -155,6 +172,13 @@ export const showConfigUI = async () => {
             : i18n.t('(not set)'),
         },
         {
+          label: i18n.t('AI Provider'),
+          value: 'AI_PROVIDER',
+          hint: hasOwn(config, 'AI_PROVIDER')
+            ? config.AI_PROVIDER
+            : i18n.t('(default: openai)'),
+        },
+        {
           label: i18n.t('Cancel'),
           value: 'cancel',
           hint: i18n.t('Exit the program'),
@@ -175,6 +199,17 @@ export const showConfigUI = async () => {
       });
       if (p.isCancel(key)) return;
       await setConfigs([['OPENAI_KEY', key]]);
+    } else if (choice === 'GEMINI_API_KEY') {
+      const key = await p.text({
+        message: i18n.t('Enter your Gemini API key'),
+        validate: (value) => {
+          if (!value.length) {
+            return i18n.t('Please enter a key');
+          }
+        },
+      });
+      if (p.isCancel(key)) return;
+      await setConfigs([['GEMINI_API_KEY', key]]);
     } else if (choice === 'OPENAI_API_ENDPOINT') {
       const apiEndpoint = await p.text({
         message: i18n.t('Enter your OpenAI API Endpoint'),
@@ -208,6 +243,16 @@ export const showConfigUI = async () => {
       if (p.isCancel(language)) return;
       await setConfigs([['LANGUAGE', language]]);
       i18n.setLanguage(language);
+    } else if (choice === 'AI_PROVIDER') {
+      const provider = (await p.select({
+        message: i18n.t('Select AI Provider'),
+        options: [
+          { value: 'openai', label: 'OpenAI' },
+          { value: 'gemini', label: 'Gemini' },
+        ],
+      })) as string;
+      if (p.isCancel(provider)) return;
+      await setConfigs([['AI_PROVIDER', provider]]);
     }
     if (choice === 'cancel') return;
     showConfigUI();
