@@ -101,12 +101,29 @@ export async function prompt({
   usePrompt,
   silentMode,
 }: { usePrompt?: string; silentMode?: boolean } = {}) {
+  // console.log("DEBUG: ENTERING PROMPT FUNCTION IN SRC"); // Removed top-level log
+  const config = await getConfig();
   const {
-    OPENAI_KEY: key,
     SILENT_MODE,
-    OPENAI_API_ENDPOINT: apiEndpoint,
     MODEL: model,
-  } = await getConfig();
+    AI_PROVIDER,
+    OPENAI_KEY,
+    GEMINI_API_KEY,
+    OPENAI_API_ENDPOINT,
+  } = config;
+
+  // console.log("DEBUG: src/prompt.ts - Loaded config:", JSON.stringify(config)); // Removed log
+
+  let apiKey = AI_PROVIDER === 'gemini' ? GEMINI_API_KEY : OPENAI_KEY;
+  const apiEndpoint = OPENAI_API_ENDPOINT; // This is OpenAI specific
+
+  if (!apiKey && AI_PROVIDER === 'openai') {
+    throw new KnownError(i18n.t('Please set your OpenAI API key via `ai config set OPENAI_KEY=<your token>`'));
+  } else if (!apiKey && AI_PROVIDER === 'gemini') {
+    throw new KnownError(i18n.t('Please set your Gemini API key via `ai config set GEMINI_API_KEY=<your token>`'));
+  }
+
+
   const skipCommandExplanation = silentMode || SILENT_MODE;
 
   console.log('');
@@ -117,9 +134,9 @@ export async function prompt({
   spin.start(i18n.t(`Loading...`));
   const { readInfo, readScript } = await getScriptAndInfo({
     prompt: thePrompt,
-    key,
+    key: apiKey as string, // key will be defined here due to checks above
     model,
-    apiEndpoint,
+    apiEndpoint, // Will be ignored by Gemini
   });
   spin.stop(`${i18n.t('Your script')}:`);
   console.log('');
@@ -133,7 +150,7 @@ export async function prompt({
     if (!info) {
       const { readExplanation } = await getExplanation({
         script,
-        key,
+        key: apiKey as string,
         model,
         apiEndpoint,
       });
@@ -146,12 +163,12 @@ export async function prompt({
     }
   }
 
-  await runOrReviseFlow(script, key, model, apiEndpoint, silentMode);
+  await runOrReviseFlow(script, apiKey as string, model, apiEndpoint, silentMode);
 }
 
 async function runOrReviseFlow(
   script: string,
-  key: string,
+  apiKey: string, // Changed parameter name
   model: string,
   apiEndpoint: string,
   silentMode?: boolean
@@ -191,7 +208,7 @@ async function runOrReviseFlow(
         label: '🔁 ' + i18n.t('Revise'),
         hint: i18n.t('Give feedback via prompt and get a new result'),
         value: async () => {
-          await revisionFlow(script, key, model, apiEndpoint, silentMode);
+          await revisionFlow(script, apiKey, model, apiEndpoint, silentMode);
         },
       },
       {
@@ -220,7 +237,7 @@ async function runOrReviseFlow(
 
 async function revisionFlow(
   currentScript: string,
-  key: string,
+  apiKey: string, // Changed parameter name
   model: string,
   apiEndpoint: string,
   silentMode?: boolean
@@ -231,7 +248,7 @@ async function revisionFlow(
   const { readScript } = await getRevision({
     prompt: revision,
     code: currentScript,
-    key,
+    key: apiKey,
     model,
     apiEndpoint,
   });
@@ -248,7 +265,7 @@ async function revisionFlow(
     infoSpin.start(i18n.t(`Getting explanation...`));
     const { readExplanation } = await getExplanation({
       script,
-      key,
+      key: apiKey,
       model,
       apiEndpoint,
     });
@@ -261,7 +278,7 @@ async function revisionFlow(
     console.log(dim('•'));
   }
 
-  await runOrReviseFlow(script, key, model, apiEndpoint, silentMode);
+  await runOrReviseFlow(script, apiKey, model, apiEndpoint, silentMode);
 }
 
 export const parseAssert = (name: string, condition: any, message: string) => {

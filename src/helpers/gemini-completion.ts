@@ -13,7 +13,7 @@ import readline from 'readline';
 const explainInSecondRequest = true;
 
 function getGemini(key: string) {
-  const genAI = new GoogleGenerativeAI(key);
+  const genAI = new GoogleGenAI(key); // Fixed typo here
   return genAI;
 }
 
@@ -37,10 +37,10 @@ export async function getScriptAndInfo({
     key,
     modelName,
   });
-  const iterableStream = streamToIterable(stream);
+  // const iterableStream = streamToIterable(stream); // Removed for Gemini
   return {
-    readScript: readData(iterableStream, ...shellCodeExclusions),
-    readInfo: readData(iterableStream, ...shellCodeExclusions),
+    readScript: readData(stream, ...shellCodeExclusions), // Pass stream directly
+    readInfo: readData(stream, ...shellCodeExclusions),   // Pass stream directly
   };
 }
 
@@ -56,20 +56,19 @@ export async function generateCompletion({
   key: string;
 }) {
   const genAI = getGemini(key);
-  const model = genAI.getGenerativeModel({ model: modelName || 'gemini-pro' }); // Or another default model
+  // const model = genAI.getGenerativeModel({ model: modelName || 'gemini-pro' }); // Removed this line
 
   try {
-    const result = await model.generateContentStream({
+    const result = await genAI.models.generateContentStream({ // Call on genAI.models
+      model: modelName || 'gemini-pro', // Pass modelName here
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       // generationConfig: { // Add if needed
       //   candidateCount: number,
       // },
     });
 
-    // Adapt the stream to be compatible with existing stream handling logic
-    // This might require creating a custom Readable stream or adapting the existing one
-    // For now, let's assume result.stream is directly usable or can be adapted
-    return result.stream; // This needs to be an IncomingMessage-like stream
+    // The 'result' from generateContentStream is already the AsyncGenerator
+    return result; // Return the stream directly
   } catch (err) {
     const error = err as Error; // Adjust error handling as per Gemini SDK
 
@@ -134,8 +133,8 @@ export async function getExplanation({
     number: 1,
     modelName,
   });
-  const iterableStream = streamToIterable(stream);
-  return { readExplanation: readData(iterableStream) };
+  // const iterableStream = streamToIterable(stream); // Removed for Gemini
+  return { readExplanation: readData(stream) }; // Pass stream directly
 }
 
 export async function getRevision({
@@ -156,9 +155,9 @@ export async function getRevision({
     number: 1,
     modelName,
   });
-  const iterableStream = streamToIterable(stream);
+  // const iterableStream = streamToIterable(stream); // Removed for Gemini
   return {
-    readScript: readData(iterableStream, ...shellCodeExclusions),
+    readScript: readData(stream, ...shellCodeExclusions), // Pass stream directly
   };
 }
 

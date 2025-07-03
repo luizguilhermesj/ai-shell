@@ -30,12 +30,8 @@ const parseAssert = (name: string, condition: any, message: string) => {
 
 const configParsers = {
   OPENAI_KEY(key?: string) {
-    if (!key) {
-      throw new KnownError(
-        `Please set your OpenAI API key via \`${commandName} config set OPENAI_KEY=<your token>\`` // TODO: i18n
-      );
-    }
-
+    // Do not throw here; let the calling code decide if it's required
+    // based on AI_PROVIDER.
     return key;
   },
   GEMINI_API_KEY(key?: string) {

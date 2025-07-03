@@ -43,6 +43,7 @@ export async function getScriptAndInfo({
 }) {
   const config = await getConfig();
   const fullPrompt = getFullPrompt(prompt);
+  // console.log("DEBUG: getScriptAndInfo - AI_PROVIDER:", config.AI_PROVIDER, "GEMINI_API_KEY:", config.GEMINI_API_KEY ? "SET" : "NOT SET");
 
   if (config.AI_PROVIDER === 'gemini') {
     if (!config.GEMINI_API_KEY) {
@@ -88,6 +89,7 @@ export async function generateCompletion({
   apiEndpoint: string;
 }) {
   const config = await getConfig();
+  // console.log("DEBUG: generateCompletion - AI_PROVIDER:", config.AI_PROVIDER, "GEMINI_API_KEY:", config.GEMINI_API_KEY ? "SET" : "NOT SET");
 
   if (config.AI_PROVIDER === 'gemini') {
     if (!config.GEMINI_API_KEY) {
@@ -180,6 +182,7 @@ export async function getExplanation({
 }) {
   const config = await getConfig();
   const prompt = getExplanationPrompt(script);
+  // console.log("DEBUG: getExplanation - AI_PROVIDER:", config.AI_PROVIDER, "GEMINI_API_KEY:", config.GEMINI_API_KEY ? "SET" : "NOT SET");
 
   if (config.AI_PROVIDER === 'gemini') {
     if (!config.GEMINI_API_KEY) {
@@ -218,6 +221,7 @@ export async function getRevision({
 }) {
   const config = await getConfig();
   const fullPrompt = getRevisionPrompt(prompt, code);
+  // console.log("DEBUG: getRevision - AI_PROVIDER:", config.AI_PROVIDER, "GEMINI_API_KEY:", config.GEMINI_API_KEY ? "SET" : "NOT SET");
 
   if (config.AI_PROVIDER === 'gemini') {
     if (!config.GEMINI_API_KEY) {
